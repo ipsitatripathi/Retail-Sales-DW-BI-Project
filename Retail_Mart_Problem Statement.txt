@@ -1,0 +1,15 @@
+Problem Statement:
+
+The organization operates a large-scale retail business, selling thousands of products across hundreds of retail locations over the past 10 years. A customer royalty (loyalty) program is in place, rewarding customers based on their purchase behavior. However, the company currently lacks a centralized, real-time analytics system to derive actionable insights from its vast and growing historical and transactional data.
+
+The goal is to design and implement a real-time data analytics and insights platform that enables the organization to:
+
+Track and analyze customer behavior across all retail stores in real time.
+
+Optimize the royalty program by identifying high-value customers, churn risk, and promotional effectiveness.
+
+Understand product performance, including sales trends, stock movement, and regional preferences.
+
+Support data-driven decision-making for marketing, inventory, and customer engagement strategies.
+
+The solution must integrate with existing point-of-sale systems, ingest and process data in near real-time, and provide dashboards and alerts for various stakeholders. It should also be scalable, secure, and support predictive modeling for future planning.

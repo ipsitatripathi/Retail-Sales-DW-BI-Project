@@ -1,0 +1,158 @@
+-- create database
+create database test_db ;
+
+-- create schema
+create schema test_db_schema ;
+
+-- create tables
+
+-- dimension table - DimDate
+create table DimDate(
+    DateID int primary key,
+    Date date,
+    DayOfWeek varchar(10),
+    Month varchar(10),
+    Quarter int,
+    year int,
+    IsWeekend boolean
+);
+
+-- dimension table - DimLoyaltyProgram
+create or replace table DimLoyaltyProgram(
+    LoyaltyProgramID int primary key,
+    ProgramName varchar(100),
+    ProgramTier varchar(50),
+    PointsEarned int
+);
+
+-- dimension table - DimCustomer
+create or replace table DimCustomer(
+    CustomerID int primary key autoincrement start 1 increment 1,
+    FirstName varchar(100),
+    LastName varchar(100),
+    Gender varchar(100),
+    DOB date,
+    Email varchar(100),
+    Address varchar(200),
+    City varchar(200),
+    State varchar(200),
+    ZipCode varchar(100),
+    Country varchar(200),
+    LoyaltyProgramID int
+);
+
+-- dimension table - DimProduct
+create table DimProduct(
+    ProductID int primary key autoincrement start 1 increment 1,
+    ProductName varchar(100),
+    Category varchar(50),
+    Brand varchar(50),
+    UnitPrice decimal(10,2)
+);
+
+-- dimension table - DimStore
+create table DimStore(
+    StoreID int primary key autoincrement start 1 increment 1,
+    StoreName varchar(200),
+    StoreType varchar(100),
+    StoreOpeningDate date,
+    Address varchar(255),
+    City varchar(200),
+    State varchar(200),
+    Country varchar(200),
+    Region varchar(200),
+    ManagerName varchar(100)
+);
+
+-- fact table - FactOrders
+create table FactOrders(
+    OrderID int primary key autoincrement start 1 increment 1,
+    DateID int,
+    CustomerID int,
+    ProductID int,
+    StoreID int,
+    QuantityOrdered int,
+    OrderAmount decimal(10,2),
+    DiscountAmount decimal(10,2),
+    ShippingCost decimal(10,2),
+    TotalAmount decimal(10,2),
+    foreign key (DateID) references DimDate(DateID),
+    foreign key (CustomerID) references DimCustomer(CustomerID),
+    foreign key (ProductID) references DimProduct(ProductID),
+    foreign key (StoreID) references DimStore(StoreID)
+);
+
+create or replace file format csv_source_file_format
+type = 'csv'
+skip_header = 1
+field_optionally_enclosed_by = '"'
+date_format = 'DD-MM-YYYY' ;
+
+create or replace stage TestStage ;
+
+-- PUT 'file://C:/Users/ADMINUSER/Downloads/DWBI/data/DimLoyaltyInfo.csv' @Test_DB.Test_DB_Schema.TestStage/DimLoyaltyInfo/Auto_Compress=False;
+-- PUT 'file://C:/Users/ADMINUSER/Downloads/DWBI/data/DimCustomerInfo.csv' @Test_DB.Test_DB_Schema.TestStage/DimCustomerInfo/Auto_Compress=False;
+-- PUT 'file://C:/Users/ADMINUSER/Downloads/DWBI/data/DimProductInfo.csv' @Test_DB.Test_DB_Schema.TestStage/DimProductInfo/Auto_Compress=False;
+-- PUT 'file://C:/Users/ADMINUSER/Downloads/DWBI/data/DimDateInfo.csv' @Test_DB.Test_DB_Schema.TestStage/DimDateInfo/Auto_Compress=False;
+-- PUT 'file://C:/Users/ADMINUSER/Downloads/DWBI/data/DimStoreInfo.csv' @Test_DB.Test_DB_Schema.TestStage/DimStoreInfo/Auto_Compress=False;
+-- PUT 'file://C:/Users/ADMINUSER/Downloads/DWBI/data/FactOrdersInfo.csv' @Test_DB.Test_DB_Schema.TestStage/FactOrdersInfo/Auto_Compress=False;
+-- PUT 'file://C:/Users/ADMINUSER/Downloads/DWBI/data/100_stores_data/*.csv' @Test_DB.Test_DB_Schema.TestStage/100_stores_data Auto_Compress=False;
+
+Copy into DIMLOYALTYPROGRAM
+from @test_db.test_db_schema.teststage/DimLoyaltyInfo/DimLoyaltyInfo.csv
+file_format = (format_name = 'CSV_SOURCE_FILE_FORMAT');
+
+select * from DimLoyaltyProgram;
+
+COPY INTO DIMCUSTOMER(FirstName,LastName,Gender,DOB,Email,Address,City,State,ZipCode,Country,LoyaltyProgramID)
+FROM @test_db.test_db_schema.teststage/DimCustomerInfo/
+FILE_FORMAT = (FORMAT_NAME = 'CSV_SOURCE_FILE_FORMAT');
+
+select * from DimCustomer;
+
+COPY INTO DIMPRODUCT(ProductName,Category,Brand,UnitPrice)
+FROM @TEST_DB.TEST_DB_SCHEMA.TESTSTAGE/DimProductInfo/
+FILE_FORMAT = (FORMAT_NAME = 'CSV_SOURCE_FILE_FORMAT');
+
+select * from DimProduct;
+
+COPY INTO DIMDATE(DATEID,DATE,DAYOFWEEK,MONTH,QUARTER,YEAR,ISWEEKEND)
+FROM @TEST_DB.TEST_DB_SCHEMA.TESTSTAGE/DimDateInfo/
+FILE_FORMAT = (FORMAT_NAME = 'CSV_SOURCE_FILE_FORMAT');
+
+select * from DIMDATE;
+
+COPY INTO DIMSTORE(StoreName,StoreType,StoreOpeningDate,Address,City,State,Country,Region,ManagerName)
+FROM @TEST_DB.TEST_DB_SCHEMA.TESTSTAGE/DimStoreInfo/
+FILE_FORMAT = (FORMAT_NAME = 'CSV_SOURCE_FILE_FORMAT');
+
+select * from DIMSTORE;
+
+COPY INTO FACTORDERS(DateID,CustomerID,ProductID,StoreID,QuantityOrdered,OrderAmount,DiscountAmount,ShippingCost,TotalAmount)
+FROM @TEST_DB.TEST_DB_SCHEMA.TESTSTAGE/FactOrdersInfo/
+FILE_FORMAT = (FORMAT_NAME = 'CSV_SOURCE_FILE_FORMAT');
+
+select * from FACTORDERS;
+
+COPY INTO FACTORDERS(DateID,CustomerID,ProductID,StoreID,QuantityOrdered,OrderAmount,DiscountAmount,ShippingCost,TotalAmount)
+FROM @TEST_DB.TEST_DB_SCHEMA.TESTSTAGE/100_stores_data/
+FILE_FORMAT = (FORMAT_NAME = 'CSV_SOURCE_FILE_FORMAT');
+
+select * from FACTORDERS LIMIT 100;
+
+-- create a new user
+CREATE OR REPLACE USER Test_PowerBI_User1
+    PASSWORD = 'Test_PowerBI_User'
+    LOGIN_NAME = 'PowerBI User1'
+    DEFAULT_ROLE = 'ACCOUNTADMIN'
+    DEFAULT_WAREHOUSE = 'COMPUTE_WH'
+    MUST_CHANGE_PASSWORD = TRUE;
+
+-- grant the user accountadmin access
+GRANT ROLE ACCOUNTADMIN TO USER TEST_POWERBI_USER1;
+
+-- USE THE ABOVE USER TO LOAD DATA
+
+
+
+

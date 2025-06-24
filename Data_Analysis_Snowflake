@@ -1,0 +1,215 @@
+-- READING FROM SNOWFLAKE TABLES
+-- Query 1
+-- update store table so that all stores have opening date after 1-jan-2014
+select * from DIMSTORE;
+update DIMSTORE set storeopeningdate = dateadd(day,uniform(0,3800,random()),'2014-01-01');
+commit;
+
+-- Query 2
+-- update the store table so that stores with storeid between 91 and 100 are opened in the last 12 months
+select * from DIMSTORE where storeid between 91 and 100;
+update DIMSTORE set storeopeningdate = dateadd(day,uniform(0,360,random()),'2024-07-30')
+where storeid between 91 and 100;
+
+-- Query 3
+-- update the customer table so that all customers are at least 12 years old, any customer that is less than 12 years age, subtract 12 years from their dob
+select * from DIMCUSTOMER where DOB > dateadd(year,-12,current_date);
+update DIMCUSTOMER set DOB = dateadd(year,-12,dob) where DOB > dateadd(year,-12,current_date);
+commit;
+
+-- Query 4
+-- update for orders in factorders table where dateid has value before storeopeningdate of respective stores
+select * from factorders f join dimdate d on f.dateid = d.dateid
+join dimstore s on f.storeid = s.storeid  where d.date < s.storeopeningdate;
+
+update factorders f set f.dateid = r.dateid from (select orderid,d.dateid from (
+select orderid, dateadd(day,datediff(day,s.storeopeningdate, current_date)*uniform(1,10,random())*0.1,s.storeopeningdate)as newdate from factorders f join dimdate d on f.dateid = d.dateid join dimstore s on f.storeid = s.storeid
+where d.date < s.storeopeningdate) o join dimdate d on o.newdate = d.date) r where f.orderid = r.orderid ;
+commit ;
+
+-- Query 5
+-- list customers who have not placed orders in last 30 days
+select * from DIMCUSTOMER where customerid not in (
+select distinct c.customerid from DIMCUSTOMER c join factorders f on c.customerid = f.customerid
+join dimdate d on f.dateid = d.dateid where d.date >= dateadd(month,-1,current_date));
+
+-- Query 6
+-- list the store that was opened most recently along with its sales since then
+with storerank as (
+select storeid, storeopeningdate, row_number() over (order by storeopeningdate desc) as finalrank from DIMSTORE),
+mostrecentstore as (
+select storeid from storerank where finalrank = 1),
+storeamount as (
+select o.storeid, sum(totalamount) as amount from factorders o join mostrecentstore s on o.storeid = s.storeid
+group by o.storeid)
+select s.*,a.amount from DIMSTORE s join storeamount a on s.storeid = a.storeid;
+
+-- Query 7
+-- find customers who have ordered product from more than 3 categories in the last 6 months
+with basedata as (
+select o.customerid, p.category
+from factorders o join dimdate d on o.dateid = d.dateid join dimproduct p on o.productid = p.productid
+where d.date > dateadd(month,-6,current_date) group by o.customerid, p.category)
+select customerid from basedata 
+group by customerid having count(distinct category) > 3;
+
+-- Query 8
+-- get the monthly total sales for the current year
+select d.month, sum(o.totalamount) from factorders o join dimdate d on o.dateid=d.dateid
+where d.year = extract(year from current_date) group by d.month order by d.month;
+
+-- Query 9
+-- find the highest discount given on any order in the last 1 year
+with basedata as (
+select discountamount, row_number() over (order by discountamount desc) as discountrank
+from factorders f join dimdate d
+on f.dateid = d.dateid where d.date >= dateadd(year,-1,current_date))
+select * from basedata where discountrank=1;
+
+-- Query 10
+-- calculate total sales by multiplying the unit price from product column with quantity ordered from factorders
+select sum(p.unitprice * f.quantityordered)
+from factorders f join dimproduct p on f.productid = p.productid ;
+
+-- Query 11
+-- show the customer id of the customer who has taken the maximum discount in the business's lifetime
+select customerid from factorders 
+group by customerid
+order by sum(discountamount) desc limit 1
+
+-- Query 12
+-- list the customer who has placed maximum number of orders till date
+with basedata as (
+select customerid, count(f.orderid) orders from factorders f group by customerid),
+orderrank as (
+select b.*, row_number() over (order by orders desc) as orank from basedata b)
+select customerid, orders from orderrank where orank = 1;
+ 
+-- Query 13
+-- show the top 3 brands based on their sales in last 1 year
+with brandsales as (
+select p.brand, sum(f.totalamount) sales from factorders f join dimdate d on f.dateid = d.dateid
+join dimproduct p on f.productid = p.productid where d.date >= dateadd(year, -1, current_date)
+group by brand),
+brandsalesrank as
+(select s.*, row_number() over (order by sales desc)as salesrank from brandsales s)
+select brand, sales from brandsalesrank where salesrank <= 3;
+
+-- Query 14
+-- if the discount amount and the shipping cost was made static at 5 and 8% respectively, will the sum of new total amount be greater than the total amount we have
+select case when sum(orderamount-orderamount*0.05-orderamount*0.08) > sum(totalamount) then 'yes' else 'no' end
+as result from factorders ;
+
+-- Query 15
+-- share the number of customers and their current loyalty program status
+select l.programtier, count(c.customerid) customercount from dimcustomer c join dimloyaltyprogram l 
+on c.loyaltyprogramid = l.loyaltyprogramid group by l.programtier ;
+
+-- Query 16
+-- show the region categorywise total amount for the last 6 months
+select region, category, sum(totalamount) as totalsales from factorders f
+join dimdate d on f.dateid = d.dateid
+join dimproduct p on f.productid = p.productid
+join dimstore s on f.storeid = s.storeid
+where d.date >= dateadd(month,-6,current_date)
+group by region, category ;
+
+-- Query 17
+-- show the top 5 products based on quantity ordered in the last 3 years
+with basedata as (
+select p.productname,sum(quantityordered) totalquantity,d.date from factorders f join dimproduct p on 
+f.productid = p.productid join dimdate d on f.dateid = d.dateid 
+where d.date >= dateadd(year,-3,current_date)
+group by p.productname, d.date),
+quantityrank as (
+select b.*, dense_rank() over (order by b.totalorders desc) as ranking from basedata b)
+select productname, totalquantity from quantityrank where ranking <= 5;
+ 
+-- Query 18
+-- list the total amount for each loyalty program tier since 2023
+select l.programtier,sum(f.totalamount) as totalsales
+from dimcustomer c join dimloyaltyprogram l on c.loyaltyprogramid = l.loyaltyprogramid
+join factorders f on f.customerid = c.customerid join dimdate d on f.dateid = d.dateid
+where d.year >= 2023
+group by l.programtier ;
+
+-- Query 19
+-- calculate the revenue generated by each store manager in June 2024
+select s.managername, sum(f.totalamount) revenue
+from dimstore s join factorders f on s.storeid = f.storeid
+join dimdate d on f.dateid = d.dateid
+where d.month = 6 and d.year = 2024
+group by s.managername order by revenue desc;
+
+-- Query 20
+-- list the average order amount per store, along with store name and type for the year 2024
+select s.storename,s.storetype,avg(f.orderamount) from factorders f join dimstore s on f.storeid=s.storeid
+join dimdate d on f.dateid = d.dateid
+where d.year = 2024
+group by s.storename,s.storetype;
+
+-- READING FROM FILES IN SNOWFLAKE STAGE
+-- Query 21
+-- query data from customer csv file that is present in the stage
+
+LIST @TEST_DB.TEST_DB_SCHEMA.TESTSTAGE/DimCustomerInfo/;
+
+SELECT $1 as customer_fname, $2 as customer_lname, $3 as gender
+FROM @TEST_DB.TEST_DB_SCHEMA.TESTSTAGE/DimCustomerInfo/Auto_Compress=False/DimCustomerInfo.csv.gz
+(FILE_FORMAT => 'CSV_SOURCE_FILE_FORMAT');
+
+-- Query 22
+-- aggregate data, share the count of records in the Dimcustomer file from stage
+select count($1) from
+@TEST_DB.TEST_DB_SCHEMA.TESTSTAGE/DimCustomerInfo/Auto_Compress=False/DimCustomerInfo.csv.gz
+(FILE_FORMAT => 'CSV_SOURCE_FILE_FORMAT');
+
+-- Query 23
+-- filter data, share the records from DimCustomer file where customer dob after 1st Jan 2000
+select $1, $2, $3, $4, $5, $6 from
+@TEST_DB.TEST_DB_SCHEMA.TESTSTAGE/DimCustomerInfo/Auto_Compress=False/DimCustomerInfo.csv.gz
+(FILE_FORMAT => 'CSV_SOURCE_FILE_FORMAT')
+where $4 > '2000-01-01';
+
+-- Query 24
+-- join DimCustomer and DimLoyalty, and show the customer 1st name along with the program tier they are part of
+with customerdata as (
+select TRIM(UPPER($1)) as firstname, TRIM(UPPER($11)) as loyaltyprogramid from
+@TEST_DB.TEST_DB_SCHEMA.TESTSTAGE/DimCustomerInfo/Auto_Compress=False/DimCustomerInfo.csv.gz
+(FILE_FORMAT => 'CSV_SOURCE_FILE_FORMAT')),
+loyaltydata as (
+select TRIM(UPPER($1)) as loyaltyprogramid, TRIM(UPPER($3)) as programtier from
+@TEST_DB.TEST_DB_SCHEMA.TESTSTAGE/DimLoyaltyInfo/Auto_Compress=False/DimLoyaltyInfo.csv.gz
+(FILE_FORMAT => 'CSV_SOURCE_FILE_FORMAT'))
+select firstname, programtier from customerdata c join loyaltydata l on c.loyaltyprogramid = l.loyaltyprogramid;
+
+-- Query 25
+-- join dimcustomer and dimloyalty, show the programtier and the number of customer part of it
+with customerdata as (
+select TRIM(UPPER($1)) as firstname, TRIM(UPPER($11)) as loyaltyprogramid from
+@TEST_DB.TEST_DB_SCHEMA.TESTSTAGE/DimCustomerInfo/Auto_Compress=False/DimCustomerInfo.csv.gz
+(FILE_FORMAT => 'CSV_SOURCE_FILE_FORMAT')),
+loyaltydata as (
+select TRIM(UPPER($1)) as loyaltyprogramid, TRIM(UPPER($3)) as programtier from
+@TEST_DB.TEST_DB_SCHEMA.TESTSTAGE/DimLoyaltyInfo/Auto_Compress=False/DimLoyaltyInfo.csv.gz
+(FILE_FORMAT => 'CSV_SOURCE_FILE_FORMAT'))
+select programtier, count(1) totalcount from customerdata c join loyaltydata l on c.loyaltyprogramid = l.loyaltyprogramid
+group by programtier;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

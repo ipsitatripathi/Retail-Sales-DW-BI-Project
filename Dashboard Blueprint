@@ -1,0 +1,45 @@
+Key KPIs to be analysed (Cards)
+- Total sales
+- Total orders
+- Total customers
+- Average Order Value
+- Total discount
+- Total shipping cost
+
+Filters
+- Region
+- Category
+- Date
+
+Key Visuals
+- Amount by store type (Pie Chart)
+- Amount by region and year (Line chart)
+- Regionwise amount (Clustered bar chart)
+- Amount by program tier (Donut chart)
+- Amount by age group (Bar chart or Funnel chart)
+- Amount by category (Tree map)
+
+Measures
+- Total Order Amount - sum(orderamount)
+- Total Orders - count(orderid)
+- Total Discount Amount - sum(discountamount)
+- Total Shipping Cost - sum(shippingcost)
+- Average Order Value - avg(orderamount)
+- Total Customers - count(customerid)
+
+Calculated Columns
+- age = datediff(dimcustomer[DOB], today(), year)
+- age grouping = if (dimcustomer[age] < 18, 'Minor',
+                 if (dimcustomer[age] >= 18 && dimcustomer[age] < 25, 'Between 18 and 24',
+                 if (dimcustomer[age] >= 25 && dimcustomer[age] < 34, 'Between 25 and 34',
+                 if (dimcustomer[age] >= 35 && dimcustomer[age] < 44, 'Between 35 and 44',
+                 if (dimcustomer[age] >= 45 && dimcustomer[age] < 54, 'Between 45 and 54',
+                 if (dimcustomer[age] >= 55 && dimcustomer[age] < 64, 'Between 55 and 64', '65 and above'))))))
+
+Dashboard
+Section 1 - header, logo, filters
+Section 2 - key metric cards
+Section 3 - amount segregation by store type, timeseries and region
+Section 4 - amount segregation by program tier age group and category
+
+Theme - Accessible Tidal (Power Bi)
